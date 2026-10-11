@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+logs/
+stages/
+
+# env
+.env
+.env.test
+
+# OS
+.DS_Store
+Thumbs.db

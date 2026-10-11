@@ -1,0 +1,11 @@
+const { resolve } = require('node:path');
+
+// sequelize-cli reads this file with `require`, so it must stay CommonJS even
+// though the application itself is an ES module. Every path is explicit so
+// migrations/seeders resolve correctly regardless of the current directory.
+module.exports = {
+  config: resolve(__dirname, 'src', 'config', 'sequelize-cli.cjs'),
+  'models-path': resolve(__dirname, 'src', 'models'),
+  'migrations-path': resolve(__dirname, 'src', 'database', 'migrations'),
+  'seeders-path': resolve(__dirname, 'src', 'database', 'seeders'),
+};
