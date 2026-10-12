@@ -29,6 +29,7 @@
     "moduleTypes": {
       "**/*.ts": "cjs"
     },
+    "experimentalResolver": true,
     "compilerOptions": {
       "module": "CommonJS",
       "moduleResolution": "Node",
