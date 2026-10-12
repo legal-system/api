@@ -2,18 +2,23 @@
 import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
 
-// dotenv never overwrites an existing value, so the first file read wins.
-// Loading .env.test first gives the test run its own database.
+// Step 1: Load environment files (.env.test takes precedence if running in test)
 const nodeEnv = process.env.NODE_ENV ?? 'development';
 loadDotenv({ path: nodeEnv === 'test' ? '.env.test' : '.env' });
 loadDotenv();
 
-// z.coerce.boolean() treats any non-empty string as true, so "false" would
-// silently become true. Requiring the literal words makes that mistake visible.
+// Step 2: Custom schema helpers
+// Explicit string parsing: prevents "false" string from silently coercing to true
 const booleanString = z
   .enum(['true', 'false'])
   .transform((value) => value === 'true');
 
+// Duration validator: accepts standard units (e.g., '15m', '7d', '900')
+const durationString = z
+  .string()
+  .regex(/^\d+(ms|s|m|h|d|w|y)?$/, 'Use a duration like 15m, 7d, or 900 (seconds)');
+
+// Step 3: Define application config schema
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
@@ -28,26 +33,28 @@ const envSchema = z.object({
   DB_PASSWORD: z.string().default(''),
   DB_NAME: z.string().min(1, 'DB_NAME is required'),
 
-  // Long random values sign our tokens, so a weak one is a security bug.
+  // JWT configuration
   JWT_ACCESS_SECRET: z
     .string()
     .min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
-  JWT_ACCESS_EXPIRES_IN: z.string().min(1).default('15m'),
+  JWT_ACCESS_EXPIRES_IN: durationString.default('15m'),
   JWT_REFRESH_SECRET: z
     .string()
     .min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
-  JWT_REFRESH_EXPIRES_IN: z.string().min(1).default('7d'),
+  JWT_REFRESH_EXPIRES_IN: durationString.default('7d'),
 
+  // Bcrypt cost factor (higher = more secure, but slower)
+  PASSWORD_HASH_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
+
+  // Cookie and refresh token settings
   REFRESH_COOKIE_NAME: z.string().min(1).default('refresh_token'),
-  // httpOnly keeps the token out of JavaScript reach; secure is for https only.
   REFRESH_COOKIE_HTTP_ONLY: booleanString.default(true),
   REFRESH_COOKIE_SECURE: booleanString.default(false),
   REFRESH_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('strict'),
   REFRESH_COOKIE_PATH: z.string().default('/api/auth'),
-  // Replaying a revoked token means theft, so revoke that user's whole family.
   REFRESH_TOKEN_REUSE_DETECTION: booleanString.default(true),
 
-  // Stored comma-separated in .env, split here for cors.
+  // CORS origins: comma-separated in .env, parsed into array
   CORS_ORIGIN: z
     .string()
     .default('')
@@ -58,6 +65,7 @@ const envSchema = z.object({
         .filter(Boolean),
     ),
 
+  // Rate limiting & proxy settings
   TRUST_PROXY: booleanString.default(false),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
@@ -65,9 +73,9 @@ const envSchema = z.object({
   LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900_000),
 });
 
+// Step 4: Validate environment variables on startup and fail immediately if invalid
 const parsed = envSchema.safeParse(process.env);
 
-// Fail at startup rather than midway, and report every problem in one pass.
 if (!parsed.success) {
   const details = parsed.error.issues
     .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
@@ -75,7 +83,7 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration:\n${details}\n\nCopy .env.example to .env and fill in the missing values.`);
 }
 
-// Set after validation so token and record timestamps share one timezone.
+// Step 5: Apply global timezone and export typed configuration
 process.env.TZ = parsed.data.TZ;
 
 export const env = parsed.data;
