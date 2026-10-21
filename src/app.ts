@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
+import { errorHandler } from './middlewares/error.middleware.js';
 import apiRouter from './routes/index.js';
 
 export function createApp(): express.Express {
@@ -40,6 +41,10 @@ export function createApp(): express.Express {
 
   // Every route below is registered relative to this prefix.
   app.use('/api', apiRouter);
+
+  // Must stay last: it turns any error the routes threw into a JSON response, and
+  // without it Express would return a 500 that can expose a stack trace.
+  app.use(errorHandler);
 
   return app;
 }
