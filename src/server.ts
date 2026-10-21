@@ -9,6 +9,7 @@ const app = createApp();
 // Start the HTTP server on the configured port.
 const server = app.listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, 'legal-sys-api listening');
+  
 });
 
 // Safety net: if the server takes too long to shut down gracefully, we force kill it.
